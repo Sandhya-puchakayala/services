@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 type SellCategory = "all" | "books";
 
 export default function SellerRegistrationStep2() {
+  const [activeTab, setActiveTab] = useState<"all" | "books" | "bank">("all");
   const [sellCategory, setSellCategory] = useState<SellCategory>("all");
   const [gstin, setGstin] = useState("");
   const [gstinVerified, setGstinVerified] = useState(false);
@@ -72,7 +73,13 @@ export default function SellerRegistrationStep2() {
 
         // Pre-populate form with any previously saved partial data
         if (seller) {
-          if (seller.category === "Only Books") setSellCategory("books");
+          if (seller.category === "Only Books") {
+            setSellCategory("books");
+            setActiveTab("books");
+          } else {
+            setSellCategory("all");
+            setActiveTab("all");
+          }
           
           // All Categories fields
           if (seller.gstin) { setGstin(seller.gstin); setGstinVerified(true); }
@@ -126,7 +133,7 @@ export default function SellerRegistrationStep2() {
   };
 
   // Shared save logic — returns true on success
-  const saveStep2 = async (): Promise<boolean> => {
+  const saveStep2 = async (validateAccountDetails: boolean = false): Promise<boolean> => {
     setSaveError("");
     if (!fullName.trim()) { setFullNameError(true); return false; }
     setFullNameError(false);
@@ -141,6 +148,14 @@ export default function SellerRegistrationStep2() {
       if (!businessName.trim()) { setSaveError("Please enter business name"); return false; }
       if (!businessAddress.trim()) { setSaveError("Please enter business address"); return false; }
       if (!pincode.trim()) { setSaveError("Please enter pincode"); return false; }
+    }
+
+    // Validate account details only if going live
+    if (validateAccountDetails) {
+      if (!accHolderName.trim()) { setSaveError("Please enter account holder name"); return false; }
+      if (!accNumber.trim()) { setSaveError("Please enter account number"); return false; }
+      if (!bankName.trim()) { setSaveError("Please enter bank name"); return false; }
+      if (!ifscCode.trim()) { setSaveError("Please enter IFSC code"); return false; }
     }
 
     try {
@@ -203,29 +218,32 @@ export default function SellerRegistrationStep2() {
     }
   };
 
-  // Save button — save then wait 2 s before going to dashboard
+  // Save button — save only, NO redirect
   const handleSave = async () => {
-    const ok = await saveStep2();
+    const ok = await saveStep2(false);
+    if (ok) {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000); // Show success for 3 seconds
+    }
+  };
+
+  // GO LIVE — save with full validation (including account details), then redirect
+  const handleGoLive = async () => {
+    const ok = await saveStep2(true); // true = validate account details
     if (ok) {
       setTimeout(() => {
         window.location.href = "/seller-dashboard";
-      }, 2000);
+      }, 1000);
     }
   };
 
-  // GO LIVE — save first, then redirect immediately
-  const handleGoLive = async () => {
-    const ok = await saveStep2();
-    if (ok) {
-      window.location.href = "/seller-dashboard";
-    }
-  };
-
-  // Go to Listing — save first, then redirect
+  // Go to Listing — save and redirect
   const handleGoListing = async () => {
-    const ok = await saveStep2();
+    const ok = await saveStep2(false);
     if (ok) {
-      window.location.href = "/seller-dashboard/products";
+      setTimeout(() => {
+        window.location.href = "/seller-dashboard/products";
+      }, 1000);
     }
   };
 
@@ -826,17 +844,17 @@ export default function SellerRegistrationStep2() {
         {/* ── BODY ── */}
         <div className="s2-body">
 
-          {/* ─── SECTION 1: ID & Signature Verification ─── */}
+          {/* ─── SECTION 1: ID & Account Details ─── */}
           <div className="section-card">
-            <h2 className="section-title">ID &amp; Signature Verification</h2>
+            <h2 className="section-title">Registration Details</h2>
 
             {/* What to sell */}
             <p className="sub-label">What are you looking to sell on Petoty?</p>
             <div className="cat-row">
               <button
                 type="button"
-                className={`cat-btn ${sellCategory === "all" ? "selected" : ""}`}
-                onClick={() => setSellCategory("all")}
+                className={`cat-btn ${activeTab === "all" ? "selected" : ""}`}
+                onClick={() => { setActiveTab("all"); setSellCategory("all"); }}
               >
                 {/* Box icon */}
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -847,8 +865,8 @@ export default function SellerRegistrationStep2() {
               </button>
               <button
                 type="button"
-                className={`cat-btn ${sellCategory === "books" ? "selected" : ""}`}
-                onClick={() => setSellCategory("books")}
+                className={`cat-btn ${activeTab === "books" ? "selected" : ""}`}
+                onClick={() => { setActiveTab("books"); setSellCategory("books"); }}
               >
                 {/* Book icon */}
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -859,10 +877,22 @@ export default function SellerRegistrationStep2() {
                   <span style={{ fontWeight: 400, fontSize: 12, color: "#888" }}>(PAN is mandatory)</span>
                 </span>
               </button>
+              <button
+                type="button"
+                className={`cat-btn ${activeTab === "bank" ? "selected" : ""}`}
+                onClick={() => setActiveTab("bank")}
+              >
+                {/* Bank icon */}
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="6" width="20" height="12" rx="2" ry="2"/>
+                  <line x1="2" y1="10" x2="22" y2="10"/>
+                </svg>
+                Bank Account Details
+              </button>
             </div>
 
             {/* GSTIN - Only for All Categories */}
-            {sellCategory === "all" && (
+            {activeTab === "all" && (
               <div className="field-wrap">
                 <div className={`input-row ${gstinError ? "error" : ""}`}>
                   <input
@@ -891,7 +921,7 @@ export default function SellerRegistrationStep2() {
             )}
 
             {/* PAN & Business Details - Only for Only Books */}
-            {sellCategory === "books" && (
+            {activeTab === "books" && (
               <>
                 {/* PAN Number */}
                 <div className="field-wrap">
@@ -1016,47 +1046,136 @@ export default function SellerRegistrationStep2() {
               </>
             )}
 
-            <hr className="section-divider" />
+            {(activeTab === "all" || activeTab === "books") && (
+              <>
+                <hr className="section-divider" />
 
-            {/* e-Signature */}
-            <p className="sub-label">Add Your e-Signature</p>
-            <div className="signature-row">
-              <button
-                type="button"
-                className={`sig-btn ${signatureMode === "draw" ? "active" : ""}`}
-                onClick={() => setSignatureMode("draw")}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1565C0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-                </svg>
-                Draw your signature
-              </button>
-              <span className="sig-or">OR</span>
-              <button
-                type="button"
-                className={`sig-btn ${signatureMode === "choose" ? "active" : ""}`}
-                onClick={() => setSignatureMode("choose")}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1565C0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                </svg>
-                Choose your signature
-              </button>
-            </div>
-            {signatureMode === "draw" && (
-              <div style={{ marginTop: 16, border: "1.5px dashed #1565C0", borderRadius: 10, height: 100, background: "#f0f6ff", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <p style={{ color: "#999", fontSize: 13 }}>Draw area — click and drag here</p>
-              </div>
-            )}
-            {signatureMode === "choose" && (
-              <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                {["Signature A", "Signature B", "Signature C"].map((s) => (
-                  <div key={s} style={{ border: "1.5px solid #dde3ea", borderRadius: 8, padding: "10px 20px", fontStyle: "italic", fontSize: 16, color: "#333", cursor: "pointer", background: "#fff", fontFamily: "Georgia, serif" }}>
-                    {s.replace("Signature ", "Style ")}
+                {/* e-Signature */}
+                <p className="sub-label">Add Your e-Signature</p>
+                <div className="signature-row">
+                  <button
+                    type="button"
+                    className={`sig-btn ${signatureMode === "draw" ? "active" : ""}`}
+                    onClick={() => setSignatureMode("draw")}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1565C0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                    </svg>
+                    Draw your signature
+                  </button>
+                  <span className="sig-or">OR</span>
+                  <button
+                    type="button"
+                    className={`sig-btn ${signatureMode === "choose" ? "active" : ""}`}
+                    onClick={() => setSignatureMode("choose")}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1565C0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                    Choose your signature
+                  </button>
+                </div>
+                {signatureMode === "draw" && (
+                  <div style={{ marginTop: 16, border: "1.5px dashed #1565C0", borderRadius: 10, height: 100, background: "#f0f6ff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <p style={{ color: "#999", fontSize: 13 }}>Draw area — click and drag here</p>
                   </div>
-                ))}
-              </div>
+                )}
+                {signatureMode === "choose" && (
+                  <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    {["Signature A", "Signature B", "Signature C"].map((s) => (
+                      <div key={s} style={{ border: "1.5px solid #dde3ea", borderRadius: 8, padding: "10px 20px", fontStyle: "italic", fontSize: 16, color: "#333", cursor: "pointer", background: "#fff", fontFamily: "Georgia, serif" }}>
+                        {s.replace("Signature ", "Style ")}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Bank Accounts */}
+            {activeTab === "bank" && (
+              <>
+                <p className="sub-label" style={{ marginTop: 24 }}>Bank Account Information</p>
+
+                {/* Account Holder Name */}
+                <div className="field-wrap">
+                  <div className="input-row">
+                    <input
+                      type="text"
+                      placeholder="Account Holder Full Name *"
+                      value={accHolderName}
+                      onChange={(e) => setAccHolderName(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Account Number & IFSC - Grid */}
+                <div className="account-details-grid">
+                  <div className="field-wrap">
+                    <div className="input-row">
+                      <input
+                        type="text"
+                        placeholder="Account Number *"
+                        value={accNumber}
+                        onChange={(e) => setAccNumber(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="field-wrap">
+                    <div className="input-row">
+                      <input
+                        type="text"
+                        placeholder="IFSC Code *"
+                        value={ifscCode}
+                        onChange={(e) => setIfscCode(e.target.value.toUpperCase())}
+                        maxLength={11}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bank Name */}
+                <div className="field-wrap">
+                  <div className="input-row">
+                    <input
+                      type="text"
+                      placeholder="Bank Name (e.g., HDFC Bank, ICICI Bank) *"
+                      value={bankName}
+                      onChange={(e) => setBankName(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Account Type */}
+                <div className="field-wrap">
+                  <p style={{ fontSize: 13, color: "#666", marginBottom: 8, fontWeight: 500 }}>Account Type</p>
+                  <div className="account-type-group">
+                    <div className="radio-option">
+                      <input
+                        type="radio"
+                        id="savings"
+                        name="accountType"
+                        value="savings"
+                        checked={accType === "savings"}
+                        onChange={(e) => setAccType(e.target.value as "savings" | "current")}
+                      />
+                      <label htmlFor="savings">Savings</label>
+                    </div>
+                    <div className="radio-option">
+                      <input
+                        type="radio"
+                        id="current"
+                        name="accountType"
+                        value="current"
+                        checked={accType === "current"}
+                        onChange={(e) => setAccType(e.target.value as "savings" | "current")}
+                      />
+                      <label htmlFor="current">Current</label>
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
           </div>
 
@@ -1141,97 +1260,19 @@ export default function SellerRegistrationStep2() {
               type="button"
               className="save-btn"
               onClick={handleSave}
-              style={{ background: saved ? "#e8f5e9" : "#c5d8f5", color: saved ? "#2e7d32" : "#1565C0" }}
+              disabled={saved}
+              style={{ 
+                background: saved ? "#e8f5e9" : "#c5d8f5", 
+                color: saved ? "#2e7d32" : "#1565C0",
+                opacity: saved ? 0.7 : 1,
+                cursor: saved ? "default" : "pointer"
+              }}
             >
-              {saved ? "✓ Saved" : "Save"}
+              {saved ? "✓ Saved Successfully" : "Save Progress"}
             </button>
           </div>
 
-          {/* ─── SECTION 3: Account Details ─── */}
-          <div className="section-card">
-            <h2 className="section-title">Account Details</h2>
-            <p className="sub-label">Bank Account Information</p>
-
-            {/* Account Holder Name */}
-            <div className="field-wrap">
-              <div className="input-row">
-                <input
-                  type="text"
-                  placeholder="Account Holder Full Name *"
-                  value={accHolderName}
-                  onChange={(e) => setAccHolderName(e.target.value)}
-                />
-              </div>
-            </div>
-
-            {/* Account Number & IFSC - Grid */}
-            <div className="account-details-grid">
-              <div className="field-wrap">
-                <div className="input-row">
-                  <input
-                    type="text"
-                    placeholder="Account Number *"
-                    value={accNumber}
-                    onChange={(e) => setAccNumber(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="field-wrap">
-                <div className="input-row">
-                  <input
-                    type="text"
-                    placeholder="IFSC Code *"
-                    value={ifscCode}
-                    onChange={(e) => setIfscCode(e.target.value.toUpperCase())}
-                    maxLength={11}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Bank Name */}
-            <div className="field-wrap">
-              <div className="input-row">
-                <input
-                  type="text"
-                  placeholder="Bank Name (e.g., HDFC Bank, ICICI Bank) *"
-                  value={bankName}
-                  onChange={(e) => setBankName(e.target.value)}
-                />
-              </div>
-            </div>
-
-            {/* Account Type */}
-            <div className="field-wrap">
-              <p style={{ fontSize: 13, color: "#666", marginBottom: 8, fontWeight: 500 }}>Account Type</p>
-              <div className="account-type-group">
-                <div className="radio-option">
-                  <input
-                    type="radio"
-                    id="savings"
-                    name="accountType"
-                    value="savings"
-                    checked={accType === "savings"}
-                    onChange={(e) => setAccType(e.target.value as "savings" | "current")}
-                  />
-                  <label htmlFor="savings">Savings</label>
-                </div>
-                <div className="radio-option">
-                  <input
-                    type="radio"
-                    id="current"
-                    name="accountType"
-                    value="current"
-                    checked={accType === "current"}
-                    onChange={(e) => setAccType(e.target.value as "savings" | "current")}
-                  />
-                  <label htmlFor="current">Current</label>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ─── SECTION 4: Listing & Stock Availability ─── */}
+          {/* ─── SECTION 3: Listing & Stock Availability ─── */}
           <div className="section-card">
             <h2 className="section-title">Listing &amp; Stock Availability</h2>
 
@@ -1292,19 +1333,22 @@ export default function SellerRegistrationStep2() {
                 {saveError}
               </div>
             )}
+            <div style={{ marginTop: 28, padding: "16px 14px", background: "#f0f6ff", border: "1px solid #b3d9ff", borderRadius: 8, fontSize: 13, color: "#1565C0", lineHeight: 1.6 }}>
+              <strong>📝 Tips:</strong><br/>
+              • <strong>Save Progress</strong> - Saves your data, stay on this page to continue editing<br/>
+              • <strong>Go to Listing</strong> - Saves and takes you to add products<br/>
+              • <strong>GO LIVE NOW</strong> - Saves all details (including bank info) and launches your store
+            </div>
             <div className="bottom-actions">
               <button type="button" className="go-live-btn" onClick={handleGoLive}>
-                GO LIVE NOW
+                🚀 GO LIVE NOW
               </button>
               <button
                 type="button"
                 className="go-listing-btn"
                 onClick={handleGoListing}
               >
-                Go to Listing
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="9 18 15 12 9 6"/>
-                </svg>
+                Add Products →
               </button>
             </div>
           </div>
