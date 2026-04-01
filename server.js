@@ -10,14 +10,24 @@ const sellerRoutes = require('./routes/sellerRoutes');
 
 const app = express();
 
+// CORS Configuration - MUST be first before other middleware
+app.use(cors({
+  origin: true, 
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
 // Middleware
 app.use(express.json()); // Allows your server to accept JSON data from the frontend
 
-// CORS Configuration (Reflect origin to solve LAN/Global testing blocks)
-app.use(cors({
-  origin: true, 
-  credentials: true, 
-}));
+// 🔍 LOG ALL INCOMING REQUESTS
+app.use((req, res, next) => {
+  console.log(`\n🔵 [REQUEST] ${req.method} ${req.path}`);
+  console.log('Body:', req.body);
+  next();
+});
+
 // Basic test route
 app.get('/api/health', (req, res) => {
   res.json({ message: 'Petoty backend is running smoothly!' });
@@ -66,24 +76,14 @@ const connectDB = async () => {
     let finalURI = mongoURI;
 
     if (!isValidURI || mongoURI.includes('127.0.0.1') || mongoURI.includes('localhost')) {
-      console.log('No valid remote URI provided or local URI detected. Booting a persistent local Database engine...');
+      console.log('No valid remote URI provided or local URI detected. Booting in-memory Database engine...');
       
-      const fs = require('fs');
-      if (!fs.existsSync('./local-database')) {
-        fs.mkdirSync('./local-database');
-      }
-
-      const mongoServer = await MongoMemoryServer.create({
-        instance: {
-          dbPath: './local-database',
-          storageEngine: 'wiredTiger'
-        }
-      });
+      const mongoServer = await MongoMemoryServer.create();
       finalURI = mongoServer.getUri();
     }
 
     await mongoose.connect(finalURI);
-    console.log(`MongoDB connected successfully to ${finalURI.includes('127.0.0.1') ? 'development Local DB' : 'remote DB'}.`);
+    console.log(`MongoDB connected successfully to development Local DB.`);
   } catch (err) {
     console.error('MongoDB connection error:', err);
     process.exit(1);

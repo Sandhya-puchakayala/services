@@ -4,22 +4,195 @@ import { useState } from "react";
 
 type Tab = "login" | "register";
 
+const API_BASE_URL = "http://localhost:5000/api/sellers";
+
 export default function LoginPage() {
   const [tab, setTab] = useState<Tab>("login");
   const [showPass, setShowPass] = useState(false);
   const [showConfirmPass, setShowConfirmPass] = useState(false);
-  const [otpSentMobile, setOtpSentMobile] = useState(false);
-  const [otpSentEmail, setOtpSentEmail] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
-  /* ── plain redirect — no backend ── */
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    window.location.href = "/seller-dashboard";
+  // Login form states
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  // Register form states
+  const [regName, setRegName] = useState("");
+  const [regMobile, setRegMobile] = useState("");
+  const [regEmail, setRegEmail] = useState("");
+  const [regPassword, setRegPassword] = useState("");
+  const [regConfirmPassword, setRegConfirmPassword] = useState("");
+  const [regMobileOtp, setRegMobileOtp] = useState("");
+  const [regEmailOtp, setRegEmailOtp] = useState("");
+  const [regMobileOtpSent, setRegMobileOtpSent] = useState(false);
+  const [regEmailOtpSent, setRegEmailOtpSent] = useState(false);
+
+  // Send OTP to mobile (Register)
+  const handleSendRegMobileOtp = async () => {
+    if (!regMobile || regMobile.length !== 10) {
+      setError("Please enter a valid 10-digit mobile number");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/send-otp-mobile`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: regMobile }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setRegMobileOtpSent(true);
+        setSuccessMsg("OTP sent to your mobile!");
+        setTimeout(() => setSuccessMsg(""), 3000);
+      } else {
+        setError(data.message || "Failed to send OTP");
+      }
+    } catch (err: any) {
+      setError(err.message || "Network error");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  // Send OTP to email (Register)
+  const handleSendRegEmailOtp = async () => {
+    if (!regEmail || !regEmail.includes("@")) {
+      setError("Please enter a valid email address");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/send-otp-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: regEmail }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setRegEmailOtpSent(true);
+        setSuccessMsg("OTP sent to your email!");
+        setTimeout(() => setSuccessMsg(""), 3000);
+      } else {
+        setError(data.message || "Failed to send OTP");
+      }
+    } catch (err: any) {
+      setError(err.message || "Network error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Login with Email + Password
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    window.location.href = "/seller-registration";
+    setError("");
+
+    if (!loginEmail || !loginPassword) {
+      setError("Please enter email and password");
+      return;
+    }
+
+    setLoginLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: loginEmail,
+          password: loginPassword,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        console.log("✅ Login successful!");
+        // Store token and seller data
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("seller", JSON.stringify(data));
+        // Check if seller has completed Step 2 (Business Details)
+        if (!data.registrationStep || data.registrationStep < 2) {
+          console.log("⚠️ Step 2 not completed. Redirecting to registration step 2...");
+          window.location.href = "/seller-registration";
+        } else {
+          // Step 2 done — go to dashboard
+          window.location.href = "/seller-dashboard";
+        }
+      } else {
+        setError(data.message || "Login failed");
+      }
+    } catch (err: any) {
+      setError(err.message || "Network error");
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  // Register with OTP
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    if (!regName || !regEmail || !regPassword || !regMobile) {
+      setError("Please fill all required fields");
+      return;
+    }
+
+    if (regPassword !== regConfirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    if (!regMobileOtp) {
+      setError("Please enter mobile OTP");
+      return;
+    }
+
+    if (!regEmailOtp) {
+      setError("Please enter email OTP");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/register-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: regName,
+          email: regEmail,
+          phone: regMobile,
+          password: regPassword,
+          phoneOtp: regMobileOtp,
+          emailOtp: regEmailOtp,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        console.log("✅ OTP verified! Redirecting to Step 2...");
+        // Store token and seller data
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("seller", JSON.stringify(data));
+        // Redirect to registration step 2
+        window.location.href = "/seller-registration";
+      } else {
+        setError(data.message || "Registration failed");
+      }
+    } catch (err: any) {
+      setError(err.message || "Network error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -39,29 +212,27 @@ export default function LoginPage() {
           font-family: 'Inter', sans-serif;
         }
 
-        /* ── CARD ── */
         .card {
           background: #fff;
           border-radius: 22px;
           width: 100%;
           max-width: 920px;
           display: flex;
-          min-height: 520px;
+          min-height: 600px;
           box-shadow: 0 24px 72px rgba(0,0,0,0.18);
           overflow: hidden;
           position: relative;
         }
 
-        /* ══════════════════ LEFT PANEL ══════════════════ */
         .left {
           flex: 0 0 52%;
           padding: 48px 52px 40px;
           display: flex;
           flex-direction: column;
           border-right: 1px solid #f2f2f2;
+          overflow-y: auto;
         }
 
-        /* Logo */
         .logo-row {
           display: flex;
           align-items: center;
@@ -85,7 +256,6 @@ export default function LoginPage() {
           text-transform: uppercase;
         }
 
-        /* Tabs */
         .tabs {
           display: flex;
           border-bottom: 1.5px solid #ececec;
@@ -117,7 +287,6 @@ export default function LoginPage() {
           border-radius: 2px;
         }
 
-        /* Heading */
         .form-head { margin-bottom: 22px; }
         .form-head h1 {
           font-size: 20px;
@@ -127,7 +296,6 @@ export default function LoginPage() {
         }
         .form-head p { font-size: 13px; color: #999; }
 
-        /* Fields */
         .field-group { display: flex; flex-direction: column; gap: 13px; }
 
         .field {
@@ -154,29 +322,29 @@ export default function LoginPage() {
           font-family: 'Inter', sans-serif;
         }
         .field input::placeholder { color: #b0b8c1; }
+        .field input:disabled { background: #f5f5f5; color: #999; }
 
         .req { color: #e53935; font-size: 12px; margin-left: 2px; }
 
-        /* OTP button inside field */
         .otp-btn {
           background: none;
           border: none;
           border-left: 1.5px solid #dde3ea;
           cursor: pointer;
           font-family: 'Inter', sans-serif;
-          font-size: 13px;
+          font-size: 12px;
           font-weight: 600;
           color: #2196F3;
-          padding: 0 16px;
+          padding: 0 12px;
           height: 100%;
           min-height: 46px;
           white-space: nowrap;
           transition: background 0.15s, color 0.15s;
         }
-        .otp-btn:hover { background: #f0f7ff; }
+        .otp-btn:hover:not(:disabled) { background: #f0f7ff; }
         .otp-btn.sent { color: #4caf50; }
+        .otp-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-        /* Eye toggle */
         .eye-btn {
           background: none;
           border: none;
@@ -189,7 +357,6 @@ export default function LoginPage() {
         }
         .eye-btn:hover { color: #555; }
 
-        /* Label prefix */
         .label-prefix {
           font-size: 13.5px;
           color: #555;
@@ -198,7 +365,26 @@ export default function LoginPage() {
           user-select: none;
         }
 
-        /* Terms */
+        .error-msg {
+          background: #ffebee;
+          border: 1px solid #f5a5a0;
+          color: #c62828;
+          padding: 10px 14px;
+          border-radius: 8px;
+          font-size: 13px;
+          margin-bottom: 10px;
+        }
+
+        .success-msg {
+          background: #e8f5e9;
+          border: 1px solid #a5d6a7;
+          color: #2e7d32;
+          padding: 10px 14px;
+          border-radius: 8px;
+          font-size: 13px;
+          margin-bottom: 10px;
+        }
+
         .terms {
           font-size: 12.5px;
           color: #666;
@@ -212,7 +398,6 @@ export default function LoginPage() {
         }
         .terms a:hover { text-decoration: underline; }
 
-        /* Submit btn */
         .submit-btn {
           display: flex;
           align-items: center;
@@ -232,12 +417,12 @@ export default function LoginPage() {
           box-shadow: 0 4px 14px rgba(21,101,192,0.35);
           margin-top: 4px;
         }
-        .submit-btn:hover { background: #0d47a1; box-shadow: 0 6px 18px rgba(21,101,192,0.45); }
-        .submit-btn:active { transform: scale(0.985); }
+        .submit-btn:hover:not(:disabled) { background: #0d47a1; box-shadow: 0 6px 18px rgba(21,101,192,0.45); }
+        .submit-btn:active:not(:disabled) { transform: scale(0.985); }
+        .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
         .arrow-icon { font-size: 18px; }
 
-        /* Footer note */
         .footer-note {
           margin-top: auto;
           padding-top: 20px;
@@ -246,7 +431,6 @@ export default function LoginPage() {
           text-align: center;
         }
 
-        /* ══════════════════ RIGHT PANEL ══════════════════ */
         .right {
           flex: 1;
           display: flex;
@@ -295,7 +479,6 @@ export default function LoginPage() {
         }
         .grow-text .sub a:hover { color: #0d47a1; }
 
-        /* Copyright */
         .copyright {
           position: absolute;
           bottom: 14px;
@@ -306,7 +489,6 @@ export default function LoginPage() {
           color: #ccc;
         }
 
-        /* Responsive */
         @media (max-width: 680px) {
           .card { flex-direction: column; }
           .left { flex: none; padding: 36px 28px 28px; border-right: none; border-bottom: 1px solid #f0f0f0; }
@@ -318,15 +500,13 @@ export default function LoginPage() {
       <div className="pg-root">
         <div className="card">
 
-          {/* ══ LEFT ══ */}
+          {/* LEFT PANEL */}
           <div className="left">
-            {/* Logo */}
             <div className="logo-row">
               <span className="logo-name">petoty</span>
               <span className="logo-badge">Seller Center</span>
             </div>
 
-            {/* Tabs */}
             <div className="tabs">
               <button
                 className={`tab-btn ${tab === "login" ? "active" : ""}`}
@@ -344,51 +524,45 @@ export default function LoginPage() {
               </button>
             </div>
 
-            {/* ── LOGIN FORM ── */}
+            {/* LOGIN FORM */}
             {tab === "login" && (
               <form onSubmit={handleLogin}>
                 <div className="form-head">
                   <h1>Welcome Back!</h1>
-                  <p>Sign in using OTP sent to your mobile or email</p>
+                  <p>Sign in with your email and password</p>
                 </div>
 
-                <div className="field-group">
-                  {/* Mobile + OTP */}
-                  <div className="field">
-                    <span className="label-prefix">
-                      Enter Mobile Number <span className="req">*</span>
-                    </span>
-                    <input
-                      type="tel"
-                      id="login-mobile"
-                      placeholder=""
-                      maxLength={10}
-                    />
-                    <button
-                      type="button"
-                      className={`otp-btn ${otpSentMobile ? "sent" : ""}`}
-                      onClick={() => setOtpSentMobile(true)}
-                    >
-                      {otpSentMobile ? "OTP Sent ✓" : "Send OTP"}
-                    </button>
-                  </div>
+                {error && <div className="error-msg">{error}</div>}
+                {successMsg && <div className="success-msg">{successMsg}</div>}
 
-                  {/* Email + OTP */}
+                <div className="field-group">
+                  {/* Email */}
                   <div className="field">
-                    <span className="label-prefix">
-                      Email ID <span className="req">*</span>
-                    </span>
+                    <span className="label-prefix">Email <span className="req">*</span></span>
                     <input
                       type="email"
-                      id="login-email"
-                      placeholder=""
+                      placeholder="your@email.com"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Password */}
+                  <div className="field">
+                    <span className="label-prefix">Password <span className="req">*</span></span>
+                    <input
+                      type={showPass ? "text" : "password"}
+                      placeholder="At least 8 characters"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
                     />
                     <button
                       type="button"
-                      className={`otp-btn ${otpSentEmail ? "sent" : ""}`}
-                      onClick={() => setOtpSentEmail(true)}
+                      className="eye-btn"
+                      onClick={() => setShowPass(!showPass)}
+                      tabIndex={-1}
                     >
-                      {otpSentEmail ? "OTP Sent ✓" : "Send OTP"}
+                      {showPass ? "👁️" : "👁️‍🗨️"}
                     </button>
                   </div>
 
@@ -397,21 +571,21 @@ export default function LoginPage() {
                     <a href="#">Terms of Use</a> &amp; <a href="#">Privacy Policy</a>
                   </p>
 
-                  <button type="submit" className="submit-btn">
-                    Login &amp; Continue <span className="arrow-icon">→</span>
+                  <button type="submit" className="submit-btn" disabled={loginLoading}>
+                    {loginLoading ? "Signing in..." : "Sign In"} <span className="arrow-icon">→</span>
                   </button>
                 </div>
 
                 <p className="footer-note">
-                  Having trouble?{" "}
-                  <a href="#" style={{ color: "#2196F3", fontWeight: 600 }}>
-                    Reset Password
+                  New to Petoty?{" "}
+                  <a href="#" style={{ color: "#2196F3", fontWeight: 600 }} onClick={(e) => { e.preventDefault(); setTab("register"); }}>
+                    Create Account
                   </a>
                 </p>
               </form>
             )}
 
-            {/* ── REGISTER FORM ── */}
+            {/* REGISTER FORM */}
             {tab === "register" && (
               <form onSubmit={handleRegister}>
                 <div className="form-head">
@@ -419,55 +593,98 @@ export default function LoginPage() {
                   <p>Register as a Petoty seller</p>
                 </div>
 
+                {error && <div className="error-msg">{error}</div>}
+                {successMsg && <div className="success-msg">{successMsg}</div>}
+
                 <div className="field-group">
-                  {/* Mobile + OTP */}
+                  {/* Name */}
                   <div className="field">
-                    <span className="label-prefix">
-                      Enter Mobile Number <span className="req">*</span>
-                    </span>
+                    <span className="label-prefix">Full Name <span className="req">*</span></span>
+                    <input
+                      type="text"
+                      placeholder="Your full name"
+                      value={regName}
+                      onChange={(e) => setRegName(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Mobile */}
+                  <div className="field">
+                    <span className="label-prefix">Mobile <span className="req">*</span></span>
                     <input
                       type="tel"
-                      id="reg-mobile"
-                      placeholder=""
+                      placeholder="10-digit number"
                       maxLength={10}
+                      value={regMobile}
+                      onChange={(e) => setRegMobile(e.target.value)}
+                      disabled={regMobileOtpSent}
                     />
                     <button
                       type="button"
-                      className={`otp-btn ${otpSentMobile ? "sent" : ""}`}
-                      onClick={() => setOtpSentMobile(true)}
+                      className={`otp-btn ${regMobileOtpSent ? "sent" : ""}`}
+                      onClick={handleSendRegMobileOtp}
+                      disabled={loading || regMobileOtpSent}
                     >
-                      {otpSentMobile ? "OTP Sent ✓" : "Send OTP"}
+                      {regMobileOtpSent ? "Sent ✓" : "Send OTP"}
                     </button>
                   </div>
 
-                  {/* Email + OTP */}
+                  {/* Mobile OTP */}
+                  {regMobileOtpSent && (
+                    <div className="field">
+                      <span className="label-prefix">Mobile OTP <span className="req">*</span></span>
+                      <input
+                        type="text"
+                        placeholder="6-digit OTP"
+                        maxLength={6}
+                        value={regMobileOtp}
+                        onChange={(e) => setRegMobileOtp(e.target.value)}
+                      />
+                    </div>
+                  )}
+
+                  {/* Email */}
                   <div className="field">
-                    <span className="label-prefix">
-                      Email ID <span className="req">*</span>
-                    </span>
+                    <span className="label-prefix">Email <span className="req">*</span></span>
                     <input
                       type="email"
-                      id="reg-email"
-                      placeholder=""
+                      placeholder="your@email.com"
+                      value={regEmail}
+                      onChange={(e) => setRegEmail(e.target.value)}
+                      disabled={regEmailOtpSent}
                     />
                     <button
                       type="button"
-                      className={`otp-btn ${otpSentEmail ? "sent" : ""}`}
-                      onClick={() => setOtpSentEmail(true)}
+                      className={`otp-btn ${regEmailOtpSent ? "sent" : ""}`}
+                      onClick={handleSendRegEmailOtp}
+                      disabled={loading || regEmailOtpSent}
                     >
-                      {otpSentEmail ? "OTP Sent ✓" : "Send OTP"}
+                      {regEmailOtpSent ? "Sent ✓" : "Send OTP"}
                     </button>
                   </div>
 
-                  {/* Create Password */}
+                  {/* Email OTP */}
+                  {regEmailOtpSent && (
+                    <div className="field">
+                      <span className="label-prefix">Email OTP <span className="req">*</span></span>
+                      <input
+                        type="text"
+                        placeholder="6-digit OTP"
+                        maxLength={6}
+                        value={regEmailOtp}
+                        onChange={(e) => setRegEmailOtp(e.target.value)}
+                      />
+                    </div>
+                  )}
+
+                  {/* Password */}
                   <div className="field">
-                    <span className="label-prefix">
-                      Create Password <span className="req">*</span>
-                    </span>
+                    <span className="label-prefix">Password <span className="req">*</span></span>
                     <input
                       type={showPass ? "text" : "password"}
-                      id="reg-password"
-                      placeholder=""
+                      placeholder="At least 8 characters"
+                      value={regPassword}
+                      onChange={(e) => setRegPassword(e.target.value)}
                     />
                     <button
                       type="button"
@@ -476,11 +693,11 @@ export default function LoginPage() {
                       aria-label="Toggle password"
                     >
                       {showPass ? (
-                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>
                         </svg>
                       ) : (
-                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
                         </svg>
                       )}
@@ -489,13 +706,12 @@ export default function LoginPage() {
 
                   {/* Confirm Password */}
                   <div className="field">
-                    <span className="label-prefix">
-                      Confirm Password <span className="req">*</span>
-                    </span>
+                    <span className="label-prefix">Confirm Password <span className="req">*</span></span>
                     <input
                       type={showConfirmPass ? "text" : "password"}
-                      id="reg-confirm-password"
-                      placeholder=""
+                      placeholder="Repeat password"
+                      value={regConfirmPassword}
+                      onChange={(e) => setRegConfirmPassword(e.target.value)}
                     />
                     <button
                       type="button"
@@ -504,11 +720,11 @@ export default function LoginPage() {
                       aria-label="Toggle confirm password"
                     >
                       {showConfirmPass ? (
-                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>
                         </svg>
                       ) : (
-                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
                         </svg>
                       )}
@@ -520,47 +736,36 @@ export default function LoginPage() {
                     <a href="#">Terms of Use</a> &amp; <a href="#">Privacy Policy</a>
                   </p>
 
-                  <button type="submit" className="submit-btn">
-                    Register &amp; Continue <span className="arrow-icon">→</span>
+                  <button type="submit" className="submit-btn" disabled={loading}>
+                    {loading ? "Processing..." : "Register & Continue"} <span className="arrow-icon">→</span>
                   </button>
                 </div>
               </form>
             )}
           </div>
 
-          {/* ══ RIGHT PANEL ══ */}
+          {/* RIGHT PANEL */}
           <div className="right">
-            {/* Decorative blob */}
             <svg className="blob-bg" viewBox="0 0 360 320" fill="none">
               <path d="M290 45C345 88 372 175 330 235C288 295 185 325 105 292C25 259 -18 175 12 103C42 31 128 -8 210 4C252 10 248 10 290 45Z" fill="#3a9aa6"/>
             </svg>
 
-            {/* Illustration */}
             <div className="illus-wrap">
               <svg width="210" height="195" viewBox="0 0 210 195" fill="none">
-                {/* Teal blob platform */}
                 <path d="M55 135C35 115 30 80 50 60C70 40 110 38 135 52C160 66 172 97 162 122C152 147 124 161 99 158C74 155 75 155 55 135Z" fill="#4CC9CF" opacity="0.8"/>
-
-                {/* Phone */}
                 <rect x="62" y="68" width="74" height="106" rx="9" fill="#2d2d2d"/>
                 <rect x="67" y="75" width="64" height="89" rx="5" fill="#f5f5f5"/>
                 <rect x="88" y="72" width="22" height="5" rx="2.5" fill="#1a1a1a"/>
                 <rect x="90" y="169" width="18" height="3" rx="1.5" fill="#555"/>
-
-                {/* Store */}
                 <rect x="78" y="108" width="42" height="41" rx="3" fill="#fff" stroke="#e0e0e0" strokeWidth="0.8"/>
                 <rect x="91" y="124" width="16" height="25" rx="2" fill="#b8dde0"/>
                 <circle cx="105" cy="136" r="1.3" fill="#888"/>
                 <rect x="80" y="113" width="9" height="8" rx="1.5" fill="#b8dde0"/>
                 <rect x="109" y="113" width="9" height="8" rx="1.5" fill="#b8dde0"/>
-
-                {/* Awning */}
                 <path d="M73 108 Q99 97 127 108 L124 111 Q99 101 76 111Z" fill="#e74c3c"/>
                 <path d="M76 111 Q99 101 124 111 L121 114 Q99 105 79 114Z" fill="#fff"/>
                 <path d="M79 114 Q99 105 121 114 L118 117 Q99 109 82 117Z" fill="#e74c3c"/>
                 <path d="M73 108 L127 108 L125 111 L75 111Z" fill="#c0392b"/>
-
-                {/* Trees */}
                 <ellipse cx="75" cy="118" rx="6" ry="8" fill="#2ecc71" opacity="0.9"/>
                 <rect x="73.5" y="125" width="2.5" height="6" rx="1" fill="#7b5e3a"/>
                 <ellipse cx="124" cy="118" rx="6" ry="8" fill="#27ae60" opacity="0.9"/>
@@ -568,7 +773,6 @@ export default function LoginPage() {
               </svg>
             </div>
 
-            {/* Text */}
             <div className="grow-text">
               <h2>
                 Grow<br />
@@ -576,12 +780,9 @@ export default function LoginPage() {
                 with <span className="brand">Petoty</span>
               </h2>
               <p className="sub">
-                Not Registered yet?{" "}
-                <a
-                  href="#"
-                  onClick={(e) => { e.preventDefault(); setTab("register"); }}
-                >
-                  Get Started
+                {tab === "register" ? "Already registered? " : "Not registered yet? "}
+                <a href="#" onClick={(e) => { e.preventDefault(); setTab(tab === "register" ? "login" : "register"); }} >
+                  {tab === "register" ? "Sign In" : "Get Started"}
                 </a>
               </p>
             </div>

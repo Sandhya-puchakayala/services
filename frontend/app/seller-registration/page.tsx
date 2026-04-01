@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 type SellCategory = "all" | "books";
 
@@ -9,6 +9,17 @@ export default function SellerRegistrationStep2() {
   const [gstin, setGstin] = useState("");
   const [gstinVerified, setGstinVerified] = useState(false);
   const [gstinError, setGstinError] = useState(false);
+  
+  // Only Books specific fields
+  const [panNumber, setPanNumber] = useState("");
+  const [panVerified, setPanVerified] = useState(false);
+  const [panError, setPanError] = useState(false);
+  const [businessName, setBusinessName] = useState("");
+  const [businessAddress, setBusinessAddress] = useState("");
+  const [pincode, setPincode] = useState("");
+  const [addressFile, setAddressFile] = useState<File | null>(null);
+  const [addressFileName, setAddressFileName] = useState("");
+  
   const [fullName, setFullName] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [storeDesc, setStoreDesc] = useState("");
@@ -16,6 +27,83 @@ export default function SellerRegistrationStep2() {
   const [fullNameError, setFullNameError] = useState(false);
   const [signatureMode, setSignatureMode] = useState<"" | "draw" | "choose">("");
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  // Account Details
+  const [accHolderName, setAccHolderName] = useState("");
+  const [accNumber, setAccNumber] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [ifscCode, setIfscCode] = useState("");
+  const [accType, setAccType] = useState<"savings" | "current">("savings");
+
+  const [pageLoading, setPageLoading] = useState(true);
+
+  const API_BASE_URL = "http://localhost:5000/api/sellers";
+
+  // ── On mount: verify token, check if step 2 already done, pre-fill saved data ──
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      window.location.href = "/Login";
+      return;
+    }
+
+    // Fetch current seller profile from server
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/dashboard`, {
+          headers: { "Authorization": `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          // Token invalid or expired
+          localStorage.removeItem("token");
+          localStorage.removeItem("seller");
+          window.location.href = "/Login";
+          return;
+        }
+        const data = await res.json();
+        const seller = data.seller;
+
+        // If step 2 already done, skip to dashboard
+        if (seller && seller.registrationStep >= 2) {
+          window.location.href = "/seller-dashboard";
+          return;
+        }
+
+        // Pre-populate form with any previously saved partial data
+        if (seller) {
+          if (seller.category === "Only Books") setSellCategory("books");
+          
+          // All Categories fields
+          if (seller.gstin) { setGstin(seller.gstin); setGstinVerified(true); }
+          
+          // Only Books fields
+          if (seller.panNumber) { setPanNumber(seller.panNumber); setPanVerified(true); }
+          if (seller.businessName) setBusinessName(seller.businessName);
+          if (seller.businessAddress) setBusinessAddress(seller.businessAddress);
+          if (seller.pincode) setPincode(seller.pincode);
+          if (seller.addressFileName) setAddressFileName(seller.addressFileName);
+          
+          // Shop Details
+          if (seller.shopDetails?.fullName)    setFullName(seller.shopDetails.fullName);
+          if (seller.shopDetails?.displayName) setDisplayName(seller.shopDetails.displayName);
+          if (seller.shopDetails?.description) setStoreDesc(seller.shopDetails.description);
+          if (seller.shopDetails?.address)     setPickupArea(seller.shopDetails.address);
+          
+          // Account Details
+          if (seller.accountDetails?.holderName) setAccHolderName(seller.accountDetails.holderName);
+          if (seller.accountDetails?.accountNumber) setAccNumber(seller.accountDetails.accountNumber);
+          if (seller.accountDetails?.bankName) setBankName(seller.accountDetails.bankName);
+          if (seller.accountDetails?.ifscCode) setIfscCode(seller.accountDetails.ifscCode);
+          if (seller.accountDetails?.accountType) setAccType(seller.accountDetails.accountType);
+        }
+      } catch (err) {
+        console.error("Profile fetch error:", err);
+      } finally {
+        setPageLoading(false);
+      }
+    })();
+  }, []);
 
   const handleVerifyGstin = () => {
     if (!gstin.trim()) { setGstinError(true); return; }
@@ -23,15 +111,144 @@ export default function SellerRegistrationStep2() {
     setGstinVerified(true);
   };
 
-  const handleSave = () => {
-    if (!fullName.trim()) { setFullNameError(true); return; }
-    setFullNameError(false);
-    setSaved(true);
+  const handleVerifyPan = () => {
+    if (!panNumber.trim()) { setPanError(true); return; }
+    setPanError(false);
+    setPanVerified(true);
   };
 
-  const handleGoLive = () => {
-    window.location.href = "/seller-dashboard";
+  const handleAddressFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setAddressFile(file);
+      setAddressFileName(file.name);
+    }
   };
+
+  // Shared save logic — returns true on success
+  const saveStep2 = async (): Promise<boolean> => {
+    setSaveError("");
+    if (!fullName.trim()) { setFullNameError(true); return false; }
+    setFullNameError(false);
+
+    // Validate category-specific fields
+    if (sellCategory === "all") {
+      if (!gstin.trim()) { setGstinError(true); return false; }
+      setGstinError(false);
+    } else {
+      if (!panNumber.trim()) { setPanError(true); return false; }
+      setPanError(false);
+      if (!businessName.trim()) { setSaveError("Please enter business name"); return false; }
+      if (!businessAddress.trim()) { setSaveError("Please enter business address"); return false; }
+      if (!pincode.trim()) { setSaveError("Please enter pincode"); return false; }
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        window.location.href = "/Login";
+        return false;
+      }
+
+      const API_BASE_URL = "http://localhost:5000/api/sellers";
+      const response = await fetch(`${API_BASE_URL}/registration-step2`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          category: sellCategory === "all" ? "All Categories" : "Only Books",
+          gstin: sellCategory === "all" ? gstin : undefined,
+          panNumber: sellCategory === "books" ? panNumber : undefined,
+          businessName: sellCategory === "books" ? businessName : undefined,
+          businessAddress: sellCategory === "books" ? businessAddress : undefined,
+          pincode: sellCategory === "books" ? pincode : undefined,
+          addressFileName: addressFileName || undefined,
+          eSignature: "signature_placeholder",
+          storeFullName: fullName,
+          storeDisplayName: displayName,
+          storeDescription: storeDesc,
+          storeAddress: pickupArea,
+          accountHolderName: accHolderName,
+          accountNumber: accNumber,
+          bankName: bankName,
+          ifscCode: ifscCode,
+          accountType: accType,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        console.log("✅ Registration step 2 saved for seller:", data.seller?.name);
+        setSaved(true);
+        // Update localStorage so stale data doesn't cause a re-redirect on next navigation
+        try {
+          const stored = localStorage.getItem("seller");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            parsed.registrationStep = 2;
+            localStorage.setItem("seller", JSON.stringify(parsed));
+          }
+        } catch (_) {}
+        return true;
+      } else {
+        setSaveError(data.message || "Failed to save registration");
+        return false;
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      setSaveError("Network error. Please try again.");
+      return false;
+    }
+  };
+
+  // Save button — save then wait 2 s before going to dashboard
+  const handleSave = async () => {
+    const ok = await saveStep2();
+    if (ok) {
+      setTimeout(() => {
+        window.location.href = "/seller-dashboard";
+      }, 2000);
+    }
+  };
+
+  // GO LIVE — save first, then redirect immediately
+  const handleGoLive = async () => {
+    const ok = await saveStep2();
+    if (ok) {
+      window.location.href = "/seller-dashboard";
+    }
+  };
+
+  // Go to Listing — save first, then redirect
+  const handleGoListing = async () => {
+    const ok = await saveStep2();
+    if (ok) {
+      window.location.href = "/seller-dashboard/products";
+    }
+  };
+
+
+
+  // Show a loading screen while checking profile from server
+  if (pageLoading) {
+    return (
+      <div style={{
+        minHeight: "100vh", display: "flex", alignItems: "center",
+        justifyContent: "center", background: "#f5f7fa",
+        fontFamily: "Inter, sans-serif", flexDirection: "column", gap: 16,
+      }}>
+        <div style={{
+          width: 40, height: 40, border: "4px solid #e8ecf0",
+          borderTop: "4px solid #1565C0", borderRadius: "50%",
+          animation: "spin 0.8s linear infinite",
+        }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <p style={{ color: "#888", fontSize: 14 }}>Checking your account…</p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -362,6 +579,58 @@ export default function SellerRegistrationStep2() {
         }
         .use-location-btn:hover { opacity: 0.75; }
 
+        /* Account Details Section */
+        .account-details-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+          margin-bottom: 16px;
+        }
+        @media (max-width: 768px) {
+          .account-details-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+        .acc-select {
+          border: 1.5px solid #dde3ea;
+          border-radius: 10px;
+          padding: 13px 16px;
+          font-size: 14px;
+          font-family: 'Inter', sans-serif;
+          color: #222;
+          background: #fff;
+          cursor: pointer;
+          transition: border-color 0.2s;
+          height: 46px;
+        }
+        .acc-select:focus {
+          outline: none;
+          border-color: #1565C0;
+          box-shadow: 0 0 0 3px rgba(21,101,192,0.08);
+        }
+        .account-type-group {
+          display: flex;
+          gap: 16px;
+          margin-bottom: 16px;
+          margin-top: 8px;
+        }
+        .radio-option {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          cursor: pointer;
+        }
+        .radio-option input[type="radio"] {
+          cursor: pointer;
+          accent-color: #1565C0;
+        }
+        .radio-option label {
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 500;
+          color: #444;
+        }
+
         /* Save btn */
         .save-btn {
           background: ${saved ? "#e8ecf0" : "#c5d8f5"};
@@ -592,32 +861,160 @@ export default function SellerRegistrationStep2() {
               </button>
             </div>
 
-            {/* GSTIN */}
-            <div className="field-wrap">
-              <div className={`input-row ${gstinError ? "error" : ""}`}>
-                <input
-                  type="text"
-                  placeholder="Enter GSTIN *"
-                  value={gstin}
-                  onChange={(e) => { setGstin(e.target.value); setGstinError(false); setGstinVerified(false); }}
-                  maxLength={15}
-                />
-                <button
-                  type="button"
-                  className={`inline-action-btn ${gstinVerified ? "verified" : ""}`}
-                  onClick={handleVerifyGstin}
-                >
-                  {gstinVerified ? "✓ Verified" : "Verify GSTIN"}
-                </button>
+            {/* GSTIN - Only for All Categories */}
+            {sellCategory === "all" && (
+              <div className="field-wrap">
+                <div className={`input-row ${gstinError ? "error" : ""}`}>
+                  <input
+                    type="text"
+                    placeholder="Enter GSTIN *"
+                    value={gstin}
+                    onChange={(e) => { setGstin(e.target.value); setGstinError(false); setGstinVerified(false); }}
+                    maxLength={15}
+                  />
+                  <button
+                    type="button"
+                    className={`inline-action-btn ${gstinVerified ? "verified" : ""}`}
+                    onClick={handleVerifyGstin}
+                  >
+                    {gstinVerified ? "✓ Verified" : "Verify GSTIN"}
+                  </button>
+                </div>
+                {gstinError && (
+                  <p className="field-error">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="#e53935"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+                    Please enter your GSTIN
+                  </p>
+                )}
+                <p className="field-note">GSTIN is required to sell products on Petoty.</p>
               </div>
-              {gstinError && (
-                <p className="field-error">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="#e53935"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-                  Please enter your GSTIN
+            )}
+
+            {/* PAN & Business Details - Only for Only Books */}
+            {sellCategory === "books" && (
+              <>
+                {/* PAN Number */}
+                <div className="field-wrap">
+                  <div className={`input-row ${panError ? "error" : ""}`}>
+                    <input
+                      type="text"
+                      placeholder="Enter PAN Number *"
+                      value={panNumber}
+                      onChange={(e) => { setPanNumber(e.target.value.toUpperCase()); setPanError(false); setPanVerified(false); }}
+                      maxLength={10}
+                    />
+                    <button
+                      type="button"
+                      className={`inline-action-btn ${panVerified ? "verified" : ""}`}
+                      onClick={handleVerifyPan}
+                    >
+                      {panVerified ? "✓ Verified" : "Verify"}
+                    </button>
+                  </div>
+                  {panError && (
+                    <p className="field-error">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="#e53935"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+                      Please enter your PAN
+                    </p>
+                  )}
+                  <p className="field-note">PAN is required to sell books on Petoty.</p>
+                </div>
+
+                <p style={{ fontSize: 13, color: "#666", marginTop: 16, marginBottom: 16, fontWeight: 500 }}>
+                  PAN &amp; Business Details are required to sell books on Petoty.
                 </p>
-              )}
-              <p className="field-note">GSTIN is required to sell products on Petoty.</p>
-            </div>
+
+                {/* Business Name */}
+                <div className="field-wrap">
+                  <div className="input-row">
+                    <input
+                      type="text"
+                      placeholder="Enter Business Name *"
+                      value={businessName}
+                      onChange={(e) => setBusinessName(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Business Address */}
+                <div className="field-wrap">
+                  <label style={{ fontSize: 13, color: "#666", fontWeight: 500, marginBottom: 8, display: "block" }}>
+                    Enter Business Address *
+                  </label>
+                  <textarea
+                    style={{
+                      width: "100%",
+                      border: "1.5px solid #dde3ea",
+                      borderRadius: 10,
+                      padding: "13px 16px",
+                      fontFamily: "Inter, sans-serif",
+                      fontSize: 14,
+                      color: "#222",
+                      minHeight: 100,
+                      resize: "vertical",
+                    }}
+                    placeholder="Enter Business Address"
+                    value={businessAddress}
+                    onChange={(e) => setBusinessAddress(e.target.value)}
+                  />
+                </div>
+
+                {/* Pincode */}
+                <div className="field-wrap">
+                  <div className="input-row">
+                    <input
+                      type="text"
+                      placeholder="Enter Pincode *"
+                      value={pincode}
+                      onChange={(e) => setPincode(e.target.value)}
+                      maxLength={6}
+                    />
+                  </div>
+                </div>
+
+                {/* Address File Upload */}
+                <div className="field-wrap" style={{ marginTop: 24, marginBottom: 16 }}>
+                  <p style={{ fontSize: 13, color: "#333", fontWeight: 600, marginBottom: 12 }}>
+                    Upload your address as a single file *
+                  </p>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <label style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "9px 22px",
+                      border: "1.5px solid #1565C0",
+                      borderRadius: 8,
+                      backgroundColor: "#f0f6ff",
+                      color: "#1565C0",
+                      fontWeight: 600,
+                      fontSize: 13,
+                      cursor: "pointer",
+                      fontFamily: "Inter, sans-serif",
+                    }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                      </svg>
+                      Upload
+                      <input
+                        type="file"
+                        onChange={handleAddressFileChange}
+                        style={{ display: "none" }}
+                        accept=".pdf,.jpg,.jpeg,.png"
+                      />
+                    </label>
+                    <span style={{ fontSize: 13, color: "#999" }}>Max File Size: 20 MB</span>
+                  </div>
+                  {addressFileName && (
+                    <p style={{ fontSize: 13, color: "#2e7d32", marginTop: 8 }}>✓ {addressFileName}</p>
+                  )}
+                  <p style={{ fontSize: 12, color: "#666", marginTop: 12, lineHeight: 1.5 }}>
+                    <strong>Front and Back:</strong> Voter ID / Passport<br/>
+                    <strong>Only Front:</strong> Electricity Bill / Telephone or Mobile Bill / Bank Passbook or Statement
+                  </p>
+                </div>
+              </>
+            )}
 
             <hr className="section-divider" />
 
@@ -750,7 +1147,91 @@ export default function SellerRegistrationStep2() {
             </button>
           </div>
 
-          {/* ─── SECTION 3: Listing & Stock Availability ─── */}
+          {/* ─── SECTION 3: Account Details ─── */}
+          <div className="section-card">
+            <h2 className="section-title">Account Details</h2>
+            <p className="sub-label">Bank Account Information</p>
+
+            {/* Account Holder Name */}
+            <div className="field-wrap">
+              <div className="input-row">
+                <input
+                  type="text"
+                  placeholder="Account Holder Full Name *"
+                  value={accHolderName}
+                  onChange={(e) => setAccHolderName(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Account Number & IFSC - Grid */}
+            <div className="account-details-grid">
+              <div className="field-wrap">
+                <div className="input-row">
+                  <input
+                    type="text"
+                    placeholder="Account Number *"
+                    value={accNumber}
+                    onChange={(e) => setAccNumber(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="field-wrap">
+                <div className="input-row">
+                  <input
+                    type="text"
+                    placeholder="IFSC Code *"
+                    value={ifscCode}
+                    onChange={(e) => setIfscCode(e.target.value.toUpperCase())}
+                    maxLength={11}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Bank Name */}
+            <div className="field-wrap">
+              <div className="input-row">
+                <input
+                  type="text"
+                  placeholder="Bank Name (e.g., HDFC Bank, ICICI Bank) *"
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Account Type */}
+            <div className="field-wrap">
+              <p style={{ fontSize: 13, color: "#666", marginBottom: 8, fontWeight: 500 }}>Account Type</p>
+              <div className="account-type-group">
+                <div className="radio-option">
+                  <input
+                    type="radio"
+                    id="savings"
+                    name="accountType"
+                    value="savings"
+                    checked={accType === "savings"}
+                    onChange={(e) => setAccType(e.target.value as "savings" | "current")}
+                  />
+                  <label htmlFor="savings">Savings</label>
+                </div>
+                <div className="radio-option">
+                  <input
+                    type="radio"
+                    id="current"
+                    name="accountType"
+                    value="current"
+                    checked={accType === "current"}
+                    onChange={(e) => setAccType(e.target.value as "savings" | "current")}
+                  />
+                  <label htmlFor="current">Current</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ─── SECTION 4: Listing & Stock Availability ─── */}
           <div className="section-card">
             <h2 className="section-title">Listing &amp; Stock Availability</h2>
 
@@ -806,6 +1287,11 @@ export default function SellerRegistrationStep2() {
             </div>
 
             {/* Bottom buttons */}
+            {saveError && (
+              <div style={{ background: "#ffebee", border: "1px solid #f5a5a0", color: "#c62828", padding: "10px 14px", borderRadius: 8, fontSize: 13, marginTop: 12 }}>
+                {saveError}
+              </div>
+            )}
             <div className="bottom-actions">
               <button type="button" className="go-live-btn" onClick={handleGoLive}>
                 GO LIVE NOW
@@ -813,7 +1299,7 @@ export default function SellerRegistrationStep2() {
               <button
                 type="button"
                 className="go-listing-btn"
-                onClick={() => window.location.href = "/seller-dashboard/products"}
+                onClick={handleGoListing}
               >
                 Go to Listing
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

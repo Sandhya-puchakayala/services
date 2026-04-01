@@ -8,12 +8,29 @@ interface Seller {
   name: string;
   email: string;
   phone?: string;
+  registrationStep?: number;
+  category?: string;
   shopDetails?: {
     shopName?: string;
+    fullName?: string;
+    displayName?: string;
     address?: string;
     description?: string;
   };
   gstNumber?: string;
+  gstin?: string;
+  panNumber?: string;
+  businessName?: string;
+  businessAddress?: string;
+  pincode?: string;
+  addressFileName?: string;
+  accountDetails?: {
+    holderName?: string;
+    accountNumber?: string;
+    bankName?: string;
+    ifscCode?: string;
+    accountType?: string;
+  };
   documents?: string[];
 }
 
@@ -137,7 +154,7 @@ export const SellerProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem("sellerToken");
+      const token = localStorage.getItem("token") || localStorage.getItem("sellerToken");
 
       // If no token, try fetching anyway (preview mode) — skip redirect to login
       const headers: Record<string, string> = {};
@@ -145,12 +162,15 @@ export const SellerProvider = ({ children }: { children: ReactNode }) => {
         headers["Authorization"] = `Bearer ${token}`;
       }
 
+      console.log('[DEBUG] Fetching dashboard with token:', token ? 'present' : 'missing');
+
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/sellers/dashboard`, {
         headers,
       });
 
       if (response.ok) {
         const result = await response.json();
+        console.log('[DEBUG] Dashboard response received:', result);
         setData({
           seller: result.seller,
           products: result.products || [],
@@ -158,10 +178,12 @@ export const SellerProvider = ({ children }: { children: ReactNode }) => {
           orders: result.orders || [],
           payments: result.payments || [],
         });
+      } else {
+        console.error('[DEBUG] Dashboard fetch failed with status:', response.status);
       }
       // If backend is unavailable, just stay with empty data — no redirect
     } catch (err: any) {
-      console.error(err);
+      console.error('[DEBUG] Dashboard fetch error:', err);
       // Don't set error so dashboard still renders with empty data
     } finally {
       setLoading(false);
