@@ -1276,79 +1276,9 @@ export default function SellerRegistrationStep2() {
           <div className="section-card">
             <h2 className="section-title">Listing &amp; Stock Availability</h2>
 
-            {/* Row 1 */}
-            <div className="listing-row">
-              <p className="listing-label">
-                List products which are already available on Petoty
-              </p>
-              <div className="listing-search">
-                <input type="text" placeholder="Search by Brand and Category" />
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#b0b8c1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                </svg>
-              </div>
-            </div>
-
-            <p className="listing-or">OR</p>
-
-            {/* Row 2 */}
-            <div className="listing-row">
-              <p className="listing-label">Have a new product?</p>
-              <button type="button" className="listing-action-btn">
-                List your own products
-              </button>
-            </div>
-
-            <p className="listing-or">OR</p>
-
-            {/* Row 3 */}
-            <div className="listing-row">
-              <p className="listing-label">Add products with high demand on Petoty.</p>
-              <button type="button" className="listing-action-btn">
-                Go to Featured Selection
-              </button>
-            </div>
-
-            {/* Dhamaka row */}
-            <div className="dhamaka-row">
-              <div className="dhamaka-badge">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="#7b2800"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                <span>Featured Selection</span>
-              </div>
-              <div className="dhamaka-stat">
-                <div className="icon-ring">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e06000" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                </div>
-                Guaranteed views
-              </div>
-              <div className="dhamaka-stat">
-                <div className="icon-ring" style={{ fontSize: 15, fontWeight: 900 }}>2x</div>
-                Higher Conversion
-              </div>
-            </div>
-
-            {/* Bottom buttons */}
-            {saveError && (
-              <div style={{ background: "#ffebee", border: "1px solid #f5a5a0", color: "#c62828", padding: "10px 14px", borderRadius: 8, fontSize: 13, marginTop: 12 }}>
-                {saveError}
-              </div>
-            )}
-            <div style={{ marginTop: 28, padding: "16px 14px", background: "#f0f6ff", border: "1px solid #b3d9ff", borderRadius: 8, fontSize: 13, color: "#1565C0", lineHeight: 1.6 }}>
-              <strong>📝 Tips:</strong><br/>
-              • <strong>Save Progress</strong> - Saves your data, stay on this page to continue editing<br/>
-              • <strong>Go to Listing</strong> - Saves and takes you to add products<br/>
-              • <strong>GO LIVE NOW</strong> - Saves all details (including bank info) and launches your store
-            </div>
             <div className="bottom-actions">
               <button type="button" className="go-live-btn" onClick={handleGoLive}>
                 🚀 GO LIVE NOW
-              </button>
-              <button
-                type="button"
-                className="go-listing-btn"
-                onClick={handleGoListing}
-              >
-                Add Products →
               </button>
             </div>
           </div>
