@@ -4,7 +4,7 @@ import { useState } from "react";
 
 type Tab = "login" | "register";
 
-const API_BASE_URL = "http://localhost:5000/api/sellers";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/sellers";
 
 export default function LoginPage() {
   const [tab, setTab] = useState<Tab>("login");

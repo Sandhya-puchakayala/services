@@ -39,7 +39,7 @@ export default function SellerRegistrationStep2() {
 
   const [pageLoading, setPageLoading] = useState(true);
 
-  const API_BASE_URL = "http://localhost:5000/api/sellers";
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/sellers";
 
   // ── On mount: verify token, check if step 2 already done, pre-fill saved data ──
   useEffect(() => {
@@ -165,7 +165,7 @@ export default function SellerRegistrationStep2() {
         return false;
       }
 
-      const API_BASE_URL = "http://localhost:5000/api/sellers";
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/sellers";
       const response = await fetch(`${API_BASE_URL}/registration-step2`, {
         method: "PUT",
         headers: {
